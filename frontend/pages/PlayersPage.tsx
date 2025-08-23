@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, User, MapPin, Calendar, Ruler } from 'lucide-react';
+import { Search, User, MapPin, Calendar, Ruler, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import backend from '~backend/client';
 import type { Player } from '~backend/tennis/types';
@@ -12,6 +12,7 @@ export function PlayersPage() {
   const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function PlayersPage() {
     try {
       const response = await backend.tennis.listPlayers();
       setPlayers(response.players);
+      setFromCache(response.from_cache);
     } catch (error) {
       console.error('Failed to load players:', error);
       toast({
@@ -72,18 +74,27 @@ export function PlayersPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Tennis Players Database</h1>
         <p className="text-lg text-gray-600">
-          Browse and search through our comprehensive player database
+          Browse and search through our comprehensive player database with optimized performance
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Search className="h-5 w-5" />
-            <span>Search Players</span>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Search className="h-5 w-5" />
+              <span>Search Players</span>
+            </div>
+            {fromCache && (
+              <Badge variant="outline">
+                <Zap className="h-3 w-3 mr-1" />
+                Cached
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription>
             Search by player name or country
+            {fromCache && " (loaded from cache for faster performance)"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,8 +165,14 @@ export function PlayersPage() {
         </div>
       )}
 
-      <div className="text-center text-sm text-gray-500">
-        Showing {filteredPlayers.length} of {players.length} players
+      <div className="text-center text-sm text-gray-500 flex items-center justify-center space-x-2">
+        <span>Showing {filteredPlayers.length} of {players.length} players</span>
+        {fromCache && (
+          <Badge variant="outline">
+            <Zap className="h-3 w-3 mr-1" />
+            Optimized with caching
+          </Badge>
+        )}
       </div>
     </div>
   );

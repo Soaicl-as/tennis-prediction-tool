@@ -1,6 +1,7 @@
 import { api, APIError } from "encore.dev/api";
 import { Query } from "encore.dev/api";
 import { tennisAPI } from "./api_client";
+import { cache } from "./cache";
 
 interface GetLiveDataParams {
   data_type: Query<'rankings' | 'matches' | 'tournaments'>;
@@ -48,9 +49,10 @@ interface GetLiveDataResponse {
   matches?: LiveMatch[];
   tournaments?: LiveTournament[];
   last_updated: string;
+  from_cache: boolean;
 }
 
-// Retrieves live tennis data directly from external APIs without storing in database.
+// Retrieves live tennis data with caching for improved performance.
 export const getLiveData = api<GetLiveDataParams, GetLiveDataResponse>(
   { expose: true, method: "GET", path: "/tennis/live" },
   async ({ data_type, tour = 'atp', days = 7 }) => {
@@ -59,20 +61,27 @@ export const getLiveData = api<GetLiveDataParams, GetLiveDataResponse>(
       validateLiveDataInput(data_type, tour, days);
 
       const response: GetLiveDataResponse = {
-        last_updated: new Date().toISOString()
+        last_updated: new Date().toISOString(),
+        from_cache: false
       };
 
       switch (data_type) {
         case 'rankings':
-          response.rankings = await fetchLiveRankings(tour);
+          const rankingsResult = await fetchLiveRankingsWithCache(tour);
+          response.rankings = rankingsResult.data;
+          response.from_cache = rankingsResult.fromCache;
           break;
 
         case 'matches':
-          response.matches = await fetchLiveMatches(tour, days);
+          const matchesResult = await fetchLiveMatchesWithCache(tour, days);
+          response.matches = matchesResult.data;
+          response.from_cache = matchesResult.fromCache;
           break;
 
         case 'tournaments':
-          response.tournaments = await fetchLiveTournaments(tour);
+          const tournamentsResult = await fetchLiveTournamentsWithCache(tour);
+          response.tournaments = tournamentsResult.data;
+          response.from_cache = tournamentsResult.fromCache;
           break;
 
         default:
@@ -103,11 +112,18 @@ function validateLiveDataInput(dataType: string, tour: string, days: number): vo
   }
 }
 
-async function fetchLiveRankings(tour: 'atp' | 'wta'): Promise<LiveRanking[]> {
+async function fetchLiveRankingsWithCache(tour: 'atp' | 'wta'): Promise<{ data: LiveRanking[]; fromCache: boolean }> {
   try {
+    // Check cache first
+    const cachedRankings = await cache.getRankings(tour);
+    if (cachedRankings) {
+      return { data: cachedRankings, fromCache: true };
+    }
+
+    // Fetch from API
     const rankings = await tennisAPI.getRankings(tour);
     
-    return rankings
+    const processedRankings = rankings
       .filter(r => r.player_name && r.ranking && r.points)
       .map(r => ({
         player_name: r.player_name,
@@ -117,13 +133,25 @@ async function fetchLiveRankings(tour: 'atp' | 'wta'): Promise<LiveRanking[]> {
         movement: r.movement
       }))
       .sort((a, b) => a.ranking - b.ranking);
+
+    // Cache for 1 hour
+    await cache.setRankings(tour, processedRankings, 3600);
+
+    return { data: processedRankings, fromCache: false };
   } catch (error) {
     throw new Error(`Failed to fetch live rankings: ${error}`);
   }
 }
 
-async function fetchLiveMatches(tour: 'atp' | 'wta', days: number): Promise<LiveMatch[]> {
+async function fetchLiveMatchesWithCache(tour: 'atp' | 'wta', days: number): Promise<{ data: LiveMatch[]; fromCache: boolean }> {
   try {
+    // Check cache first
+    const cachedMatches = await cache.getMatches(tour, days);
+    if (cachedMatches) {
+      return { data: cachedMatches, fromCache: true };
+    }
+
+    // Fetch from API
     const [recentMatches, upcomingMatches] = await Promise.all([
       tennisAPI.getRecentMatches(tour, days).catch(error => {
         console.warn(`Failed to fetch recent matches: ${error}`);
@@ -137,7 +165,7 @@ async function fetchLiveMatches(tour: 'atp' | 'wta', days: number): Promise<Live
 
     const allMatches = [...recentMatches, ...upcomingMatches];
     
-    return allMatches
+    const processedMatches = allMatches
       .filter(m => 
         m.player1 && m.player1.name && 
         m.player2 && m.player2.name && 
@@ -159,16 +187,28 @@ async function fetchLiveMatches(tour: 'atp' | 'wta', days: number): Promise<Live
         location: m.location
       }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Cache for 30 minutes
+    await cache.setMatches(tour, days, processedMatches, 1800);
+
+    return { data: processedMatches, fromCache: false };
   } catch (error) {
     throw new Error(`Failed to fetch live matches: ${error}`);
   }
 }
 
-async function fetchLiveTournaments(tour: 'atp' | 'wta'): Promise<LiveTournament[]> {
+async function fetchLiveTournamentsWithCache(tour: 'atp' | 'wta'): Promise<{ data: LiveTournament[]; fromCache: boolean }> {
   try {
+    // Check cache first (using a generic key for tournaments)
+    const cachedTournaments = await cache.get('tournaments', { tour });
+    if (cachedTournaments) {
+      return { data: cachedTournaments, fromCache: true };
+    }
+
+    // Fetch from API
     const tournaments = await tennisAPI.getTournaments(tour, new Date().getFullYear(), 'upcoming');
     
-    return tournaments
+    const processedTournaments = tournaments
       .filter(t => t.name && t.location && t.start_date && t.end_date)
       .map(t => ({
         id: t.id,
@@ -182,6 +222,11 @@ async function fetchLiveTournaments(tour: 'atp' | 'wta'): Promise<LiveTournament
         prize_money: t.prize_money
       }))
       .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+
+    // Cache for 2 hours
+    await cache.set('tournaments', { tour }, processedTournaments, 7200);
+
+    return { data: processedTournaments, fromCache: false };
   } catch (error) {
     throw new Error(`Failed to fetch live tournaments: ${error}`);
   }

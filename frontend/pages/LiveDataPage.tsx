@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RefreshCw, TrendingUp, TrendingDown, Calendar, MapPin, Trophy, Loader2 } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Calendar, MapPin, Trophy, Loader2, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import backend from '~backend/client';
 
@@ -50,6 +50,7 @@ export function LiveDataPage() {
   const [tour, setTour] = useState<'atp' | 'wta'>('atp');
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [fromCache, setFromCache] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export function LiveDataPage() {
       });
       setRankings(response.rankings || []);
       setLastUpdated(response.last_updated);
+      setFromCache(prev => ({ ...prev, rankings: response.from_cache }));
     } catch (error) {
       console.error('Failed to load rankings:', error);
       toast({
@@ -89,6 +91,7 @@ export function LiveDataPage() {
       });
       setMatches(response.matches || []);
       setLastUpdated(response.last_updated);
+      setFromCache(prev => ({ ...prev, matches: response.from_cache }));
     } catch (error) {
       console.error('Failed to load matches:', error);
       toast({
@@ -110,6 +113,7 @@ export function LiveDataPage() {
       });
       setTournaments(response.tournaments || []);
       setLastUpdated(response.last_updated);
+      setFromCache(prev => ({ ...prev, tournaments: response.from_cache }));
     } catch (error) {
       console.error('Failed to load tournaments:', error);
       toast({
@@ -157,13 +161,23 @@ export function LiveDataPage() {
     }
   };
 
+  const getCacheIndicator = (dataType: string) => {
+    const isCached = fromCache[dataType];
+    return isCached ? (
+      <Badge variant="outline" className="ml-2">
+        <Zap className="h-3 w-3 mr-1" />
+        Cached
+      </Badge>
+    ) : null;
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Live Tennis Data</h1>
           <p className="text-lg text-gray-600">
-            Real-time rankings, matches, and tournament information
+            Real-time rankings, matches, and tournament information with optimized caching
           </p>
         </div>
         
@@ -196,7 +210,10 @@ export function LiveDataPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Current {tour.toUpperCase()} Rankings</span>
+                <div className="flex items-center">
+                  <span>Current {tour.toUpperCase()} Rankings</span>
+                  {getCacheIndicator('rankings')}
+                </div>
                 <Button 
                   onClick={loadRankings} 
                   variant="outline" 
@@ -212,6 +229,7 @@ export function LiveDataPage() {
               </CardTitle>
               <CardDescription>
                 Live player rankings from official {tour.toUpperCase()} sources
+                {fromCache.rankings && " (served from cache for faster loading)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -258,7 +276,10 @@ export function LiveDataPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Recent & Upcoming Matches</span>
+                <div className="flex items-center">
+                  <span>Recent & Upcoming Matches</span>
+                  {getCacheIndicator('matches')}
+                </div>
                 <Button 
                   onClick={loadMatches} 
                   variant="outline" 
@@ -274,6 +295,7 @@ export function LiveDataPage() {
               </CardTitle>
               <CardDescription>
                 Live match results and upcoming fixtures
+                {fromCache.matches && " (served from cache for faster loading)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -348,7 +370,10 @@ export function LiveDataPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Upcoming Tournaments</span>
+                <div className="flex items-center">
+                  <span>Upcoming Tournaments</span>
+                  {getCacheIndicator('tournaments')}
+                </div>
                 <Button 
                   onClick={loadTournaments} 
                   variant="outline" 
@@ -364,6 +389,7 @@ export function LiveDataPage() {
               </CardTitle>
               <CardDescription>
                 Upcoming tournament schedule and information
+                {fromCache.tournaments && " (served from cache for faster loading)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -418,8 +444,14 @@ export function LiveDataPage() {
       </Tabs>
 
       {lastUpdated && (
-        <div className="text-center text-sm text-gray-500">
-          Last updated: {new Date(lastUpdated).toLocaleString()}
+        <div className="text-center text-sm text-gray-500 flex items-center justify-center space-x-2">
+          <span>Last updated: {new Date(lastUpdated).toLocaleString()}</span>
+          {Object.values(fromCache).some(Boolean) && (
+            <Badge variant="outline" className="ml-2">
+              <Zap className="h-3 w-3 mr-1" />
+              Optimized with caching
+            </Badge>
+          )}
         </div>
       )}
     </div>

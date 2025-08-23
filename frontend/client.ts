@@ -111,7 +111,7 @@ export namespace tennis {
         }
 
         /**
-         * Retrieves live tennis data directly from external APIs without storing in database.
+         * Retrieves live tennis data with caching for improved performance.
          */
         public async getLiveData(params: RequestType<typeof api_tennis_get_live_data_getLiveData>): Promise<ResponseType<typeof api_tennis_get_live_data_getLiveData>> {
             // Convert our params into the objects we need for the request
@@ -136,7 +136,7 @@ export namespace tennis {
         }
 
         /**
-         * Retrieves a player by name with their latest statistics.
+         * Retrieves a player by name with their latest statistics using optimized caching.
          */
         public async getPlayer(params: { name: string }): Promise<ResponseType<typeof api_tennis_get_player_getPlayer>> {
             // Now make the actual call to the API
@@ -145,7 +145,7 @@ export namespace tennis {
         }
 
         /**
-         * Retrieves recent match predictions with optional filtering.
+         * Retrieves recent match predictions with optional filtering and caching.
          */
         public async getPredictions(params: RequestType<typeof api_tennis_get_predictions_getPredictions>): Promise<ResponseType<typeof api_tennis_get_predictions_getPredictions>> {
             // Convert our params into the objects we need for the request
@@ -160,7 +160,7 @@ export namespace tennis {
         }
 
         /**
-         * Retrieves all players in the database.
+         * Retrieves all players in the database with caching for improved performance.
          */
         public async listPlayers(): Promise<ResponseType<typeof api_tennis_list_players_listPlayers>> {
             // Now make the actual call to the API
@@ -169,7 +169,7 @@ export namespace tennis {
         }
 
         /**
-         * Predicts the outcome of a tennis match between two players.
+         * Optimized prediction with caching and performance improvements
          */
         public async predictMatch(params: RequestType<typeof api_tennis_predict_match_predictMatch>): Promise<ResponseType<typeof api_tennis_predict_match_predictMatch>> {
             // Now make the actual call to the API
@@ -178,7 +178,7 @@ export namespace tennis {
         }
 
         /**
-         * Synchronizes tennis data from external APIs to keep the database current.
+         * Synchronizes tennis data from external APIs with cache invalidation.
          */
         public async syncData(params: RequestType<typeof api_tennis_sync_data_syncData>): Promise<ResponseType<typeof api_tennis_sync_data_syncData>> {
             // Now make the actual call to the API

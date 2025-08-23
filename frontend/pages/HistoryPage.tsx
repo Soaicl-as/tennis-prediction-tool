@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, History, Trophy, Calendar, RefreshCw } from 'lucide-react';
+import { Search, History, Trophy, Calendar, RefreshCw, Zap } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import backend from '~backend/client';
 
@@ -24,6 +24,7 @@ export function HistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [fromCache, setFromCache] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export function HistoryPage() {
       });
       setPredictions(response.predictions);
       setTotal(response.total);
+      setFromCache(response.from_cache);
     } catch (error) {
       console.error('Failed to load predictions:', error);
       toast({
@@ -94,18 +96,27 @@ export function HistoryPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Prediction History</h1>
         <p className="text-lg text-gray-600">
-          View all previous match predictions and their outcomes
+          View all previous match predictions and their outcomes with optimized performance
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Search className="h-5 w-5" />
-            <span>Search Predictions</span>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Search className="h-5 w-5" />
+              <span>Search Predictions</span>
+            </div>
+            {fromCache && (
+              <Badge variant="outline">
+                <Zap className="h-3 w-3 mr-1" />
+                Cached
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription>
             Search by player name to filter predictions
+            {fromCache && " (loaded from cache for faster performance)"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,8 +206,14 @@ export function HistoryPage() {
         </div>
       )}
 
-      <div className="text-center text-sm text-gray-500">
-        Showing {predictions.length} of {total} predictions
+      <div className="text-center text-sm text-gray-500 flex items-center justify-center space-x-2">
+        <span>Showing {predictions.length} of {total} predictions</span>
+        {fromCache && (
+          <Badge variant="outline">
+            <Zap className="h-3 w-3 mr-1" />
+            Optimized with caching
+          </Badge>
+        )}
       </div>
     </div>
   );
