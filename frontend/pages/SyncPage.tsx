@@ -30,6 +30,7 @@ export function SyncPage() {
   const [loading, setLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [progress, setProgress] = useState(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const dataTypeOptions = [
@@ -39,19 +40,47 @@ export function SyncPage() {
     { id: 'tournaments', label: 'Tournaments', description: 'Tournament schedules and information' }
   ];
 
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (selectedDataTypes.length === 0) {
+      newErrors.dataTypes = 'Please select at least one data type to sync';
+    }
+
+    if (!['atp', 'wta', 'both'].includes(tour)) {
+      newErrors.tour = 'Please select a valid tour';
+    }
+
+    if (daysBack < 1 || daysBack > 365) {
+      newErrors.daysBack = 'Days back must be between 1 and 365';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleDataTypeChange = (dataType: string, checked: boolean) => {
     if (checked) {
       setSelectedDataTypes(prev => [...prev, dataType]);
     } else {
       setSelectedDataTypes(prev => prev.filter(type => type !== dataType));
     }
+
+    // Clear error when user makes a selection
+    if (errors.dataTypes) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.dataTypes;
+        return newErrors;
+      });
+    }
   };
 
   const handleSync = async () => {
-    if (selectedDataTypes.length === 0) {
+    if (!validateForm()) {
       toast({
-        title: "Error",
-        description: "Please select at least one data type to sync",
+        title: "Validation Error",
+        description: "Please fix the errors in the form",
         variant: "destructive"
       });
       return;
@@ -87,9 +116,15 @@ export function SyncPage() {
       clearInterval(progressInterval);
       setProgress(0);
       console.error('Sync error:', error);
+      
+      let errorMessage = "Failed to sync data";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Sync Failed",
-        description: error instanceof Error ? error.message : "Failed to sync data",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -122,7 +157,12 @@ export function SyncPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
-            <Label className="text-base font-medium">Data Types to Sync</Label>
+            <div>
+              <Label className="text-base font-medium">Data Types to Sync</Label>
+              {errors.dataTypes && (
+                <p className="text-sm text-red-600 mt-1">{errors.dataTypes}</p>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {dataTypeOptions.map((option) => (
                 <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg">
@@ -146,7 +186,7 @@ export function SyncPage() {
             <div className="space-y-2">
               <Label htmlFor="tour">Tour</Label>
               <Select value={tour} onValueChange={(value: 'atp' | 'wta' | 'both') => setTour(value)}>
-                <SelectTrigger>
+                <SelectTrigger className={errors.tour ? 'border-red-500' : ''}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -155,12 +195,15 @@ export function SyncPage() {
                   <SelectItem value="wta">WTA Only</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.tour && (
+                <p className="text-sm text-red-600">{errors.tour}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="daysBack">Days Back (for matches)</Label>
               <Select value={daysBack.toString()} onValueChange={(value) => setDaysBack(parseInt(value))}>
-                <SelectTrigger>
+                <SelectTrigger className={errors.daysBack ? 'border-red-500' : ''}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -170,6 +213,9 @@ export function SyncPage() {
                   <SelectItem value="30">30 days</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.daysBack && (
+                <p className="text-sm text-red-600">{errors.daysBack}</p>
+              )}
             </div>
 
             <div className="space-y-2">

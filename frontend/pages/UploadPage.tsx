@@ -29,37 +29,115 @@ export function UploadPage() {
   const [player2Name, setPlayer2Name] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    // Validate file content
+    if (!csvData.trim()) {
+      newErrors.csvData = 'Please select a file or enter CSV data';
+    } else if (csvData.length > 10 * 1024 * 1024) { // 10MB limit
+      newErrors.csvData = 'File size exceeds 10MB limit';
+    } else {
+      const lines = csvData.trim().split('\n');
+      if (lines.length < 2) {
+        newErrors.csvData = 'CSV must contain at least a header and one data row';
+      }
+    }
+
+    // Validate player names if provided
+    if (player1Name.trim() && player1Name.trim().length < 2) {
+      newErrors.player1Name = 'Player 1 name must be at least 2 characters';
+    }
+    if (player1Name.trim() && player1Name.trim().length > 100) {
+      newErrors.player1Name = 'Player 1 name must be less than 100 characters';
+    }
+
+    if (player2Name.trim() && player2Name.trim().length < 2) {
+      newErrors.player2Name = 'Player 2 name must be at least 2 characters';
+    }
+    if (player2Name.trim() && player2Name.trim().length > 100) {
+      newErrors.player2Name = 'Player 2 name must be less than 100 characters';
+    }
+
+    // Check if player names are different (if both provided)
+    if (player1Name.trim() && player2Name.trim() && 
+        player1Name.trim().toLowerCase() === player2Name.trim().toLowerCase()) {
+      newErrors.player2Name = 'Player names must be different';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-        setSelectedFile(file);
-        
-        // Read file content
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.includes('csv') && !file.name.endsWith('.csv')) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please select a CSV file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "File size must be less than 10MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+    
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        if (content) {
           setCsvData(content);
-        };
-        reader.readAsText(file);
-      } else {
+          // Clear any previous errors
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.csvData;
+            return newErrors;
+          });
+        }
+      } catch (error) {
         toast({
-          title: "Invalid File Type",
-          description: "Please select a CSV file",
+          title: "File Read Error",
+          description: "Failed to read the selected file",
           variant: "destructive"
         });
       }
-    }
+    };
+    
+    reader.onerror = () => {
+      toast({
+        title: "File Read Error",
+        description: "Failed to read the selected file",
+        variant: "destructive"
+      });
+    };
+    
+    reader.readAsText(file);
   };
 
   const handleUpload = async () => {
-    if (!csvData.trim()) {
+    if (!validateForm()) {
       toast({
-        title: "Error",
-        description: "Please select a file or enter CSV data",
+        title: "Validation Error",
+        description: "Please fix the errors in the form",
         variant: "destructive"
       });
       return;
@@ -83,9 +161,15 @@ export function UploadPage() {
       });
     } catch (error) {
       console.error('Upload error:', error);
+      
+      let errorMessage = "Failed to upload data";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to upload data",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -99,6 +183,12 @@ export function UploadPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    // Clear file-related errors
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.csvData;
+      return newErrors;
+    });
   };
 
   const getSampleData = () => {
@@ -112,10 +202,39 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
   const loadSampleData = () => {
     setCsvData(getSampleData());
     setSelectedFile(null);
+    // Clear file-related errors
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.csvData;
+      return newErrors;
+    });
   };
 
   const getTotalProcessed = (processedData: UploadResult['processed_data']) => {
     return processedData.players_added + processedData.matches_added + processedData.stats_added;
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    switch (field) {
+      case 'player1Name':
+        setPlayer1Name(value);
+        break;
+      case 'player2Name':
+        setPlayer2Name(value);
+        break;
+      case 'csvData':
+        setCsvData(value);
+        break;
+    }
+
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   return (
@@ -147,13 +266,13 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="file-input">Select CSV File</Label>
+                  <Label htmlFor="file-input">Select CSV File *</Label>
                   <div className="flex items-center space-x-4">
                     <Input
                       ref={fileInputRef}
                       id="file-input"
                       type="file"
-                      accept=".csv"
+                      accept=".csv,text/csv"
                       onChange={handleFileSelect}
                       className="flex-1"
                     />
@@ -169,6 +288,9 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                       <span>{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
                     </div>
                   )}
+                  {errors.csvData && (
+                    <p className="text-sm text-red-600">{errors.csvData}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -178,8 +300,12 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                       id="player1"
                       placeholder="e.g., Novak Djokovic"
                       value={player1Name}
-                      onChange={(e) => setPlayer1Name(e.target.value)}
+                      onChange={(e) => handleInputChange('player1Name', e.target.value)}
+                      className={errors.player1Name ? 'border-red-500' : ''}
                     />
+                    {errors.player1Name && (
+                      <p className="text-sm text-red-600">{errors.player1Name}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="player2">Player 2 (Optional)</Label>
@@ -187,8 +313,12 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                       id="player2"
                       placeholder="e.g., Rafael Nadal"
                       value={player2Name}
-                      onChange={(e) => setPlayer2Name(e.target.value)}
+                      onChange={(e) => handleInputChange('player2Name', e.target.value)}
+                      className={errors.player2Name ? 'border-red-500' : ''}
                     />
+                    {errors.player2Name && (
+                      <p className="text-sm text-red-600">{errors.player2Name}</p>
+                    )}
                   </div>
                 </div>
 
@@ -231,7 +361,7 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="csvData">CSV Data</Label>
+                  <Label htmlFor="csvData">CSV Data *</Label>
                   <Button variant="outline" size="sm" onClick={loadSampleData}>
                     <FileText className="h-4 w-4 mr-2" />
                     Load Sample
@@ -241,10 +371,13 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                   id="csvData"
                   placeholder="Paste your CSV data here..."
                   value={csvData}
-                  onChange={(e) => setCsvData(e.target.value)}
+                  onChange={(e) => handleInputChange('csvData', e.target.value)}
                   rows={12}
-                  className="font-mono text-sm"
+                  className={`font-mono text-sm ${errors.csvData ? 'border-red-500' : ''}`}
                 />
+                {errors.csvData && (
+                  <p className="text-sm text-red-600">{errors.csvData}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -254,8 +387,12 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                     id="player1-manual"
                     placeholder="e.g., Novak Djokovic"
                     value={player1Name}
-                    onChange={(e) => setPlayer1Name(e.target.value)}
+                    onChange={(e) => handleInputChange('player1Name', e.target.value)}
+                    className={errors.player1Name ? 'border-red-500' : ''}
                   />
+                  {errors.player1Name && (
+                    <p className="text-sm text-red-600">{errors.player1Name}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="player2-manual">Player 2 (Optional)</Label>
@@ -263,8 +400,12 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
                     id="player2-manual"
                     placeholder="e.g., Rafael Nadal"
                     value={player2Name}
-                    onChange={(e) => setPlayer2Name(e.target.value)}
+                    onChange={(e) => handleInputChange('player2Name', e.target.value)}
+                    className={errors.player2Name ? 'border-red-500' : ''}
                   />
+                  {errors.player2Name && (
+                    <p className="text-sm text-red-600">{errors.player2Name}</p>
+                  )}
                 </div>
               </div>
 
@@ -395,6 +536,8 @@ Rafael Nadal,1986-06-03,185,left,true,Spain,,,,,,,,,,,2,2180,1150,920,0.800
             <AlertDescription>
               <strong>Smart Detection:</strong> The system automatically detects the type of data in your file and processes it accordingly. 
               You can mix different types of data in the same file - the system will extract what it can from each row.
+              <br /><br />
+              <strong>File Requirements:</strong> Maximum file size is 10MB. CSV files must have headers and at least one data row.
             </AlertDescription>
           </Alert>
         </CardContent>
